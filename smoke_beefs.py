@@ -139,215 +139,215 @@ while True:
 # ===================================================================================		
 		# COW SIZE ESTIMATION
 	
-		try:		
-			# get region of interest
-			top_crop = 250
-			bottom_crop = 950
-			left_crop = 600
-			right_crop = 1370
-			roi = img[top_crop:bottom_crop, left_crop:right_crop]
-			
-			# convert to hsv
-			hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-			
-			# thresholding
-			lower_green = np.array([40,180,40])
-			upper_green = np.array([80,255,255])
-			mask = cv2.inRange(hsv, lower_green, upper_green)
+#		try:		
+		# get region of interest
+		top_crop = 250
+		bottom_crop = 950
+		left_crop = 600
+		right_crop = 1370
+		roi = img[top_crop:bottom_crop, left_crop:right_crop]
 
-			mask = cv2.bitwise_not(mask)
+		# convert to hsv
+		hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
 
-			# smoothing
-			smoothed = mask
-			for i in range(5):
-				smoothed = cv2.GaussianBlur(smoothed,(7,7),0)
-				ret, smoothed = cv2.threshold(smoothed, 120, 255, cv2.THRESH_BINARY)
+		# thresholding
+		lower_green = np.array([40,180,40])
+		upper_green = np.array([80,255,255])
+		mask = cv2.inRange(hsv, lower_green, upper_green)
 
-			# get roi of legs
-			top_crop = 480 
-			bottom_crop = 481
-			left_crop = 0
-			right_crop = 770
-			roi_legs = smoothed[top_crop:bottom_crop, left_crop:right_crop][0]
+		mask = cv2.bitwise_not(mask)
 
-			# get back and front legs
-			obj = []
-			detected = 0
-			index = 0
-			empty_section = 0
-			right_saved = 0
-			for i in range(0, roi_legs.shape[0]):
-				if (roi_legs[i] == 255) and (detected == 0):
-					detected = 1
-					left = i
-					obj.append([left])
+		# smoothing
+		smoothed = mask
+		for i in range(5):
+			smoothed = cv2.GaussianBlur(smoothed,(7,7),0)
+			ret, smoothed = cv2.threshold(smoothed, 120, 255, cv2.THRESH_BINARY)
 
-				if (roi_legs[i] == 0) and (detected == 1):
-					if right_saved == 0:
-						right_temp = i-1
-						right_saved = 1
-					empty_section = empty_section + 1
+		# get roi of legs
+		top_crop = 480 
+		bottom_crop = 481
+		left_crop = 0
+		right_crop = 770
+		roi_legs = smoothed[top_crop:bottom_crop, left_crop:right_crop][0]
 
+		# get back and front legs
+		obj = []
+		detected = 0
+		index = 0
+		empty_section = 0
+		right_saved = 0
+		for i in range(0, roi_legs.shape[0]):
+			if (roi_legs[i] == 255) and (detected == 0):
+				detected = 1
+				left = i
+				obj.append([left])
+
+			if (roi_legs[i] == 0) and (detected == 1):
+				if right_saved == 0:
+					right_temp = i-1
+					right_saved = 1
+				empty_section = empty_section + 1
+
+			if empty_section > 30:
+				obj[index].append(right_temp)
+				detected = 0
+				empty_section = 0
+				right_saved = 0
+				center = (obj[index][0] + obj[index][1]) // 2
+				obj[index].append(center)
+				index = index + 1
+				if obj[index-1][1] - obj[index-1][0] < 40:
+					obj.pop()
+					index = index - 1
+
+			if (roi_legs[i] == 255) and (detected == 1) and (empty_section < 30):
+				empty_section = 0
+				right_saved = 0
+
+			if (i == roi_legs.shape[0]-1) and (detected == 1):
+				obj[index].append(i)
+				center = (obj[index][0] + obj[index][1]) // 2
+				obj[index].append(center)
+				index = index + 1
+				if obj[index-1][1] - obj[index-1][0] < 40:
+					obj.pop()
+
+		if index == 3:
+			obj.pop(1)
+
+		legs = np.array(obj)
+
+		# get roi back leg
+		top_crop = 0
+		bottom_crop = 700
+		left_crop = legs[1,0]
+		right_crop = left_crop + 1
+		roi_back_leg = smoothed[top_crop:bottom_crop, left_crop:right_crop]
+		roi_back_leg = np.swapaxes(roi_back_leg, 1, 0)[0]
+
+		# get tinggi pinggul
+		detected = 0
+		obj_section = 0
+		empty_section = 0
+
+		for i in range(0, roi_back_leg.shape[0]):
+			if (roi_back_leg[i] == 255) and (detected == 0):
+				detected = 1
+				top = i
+				obj_section = obj_section + 1
+
+			if (roi_back_leg[i] == 255) and (detected == 1):
+				obj_section = obj_section + 1
 				if empty_section > 30:
-					obj[index].append(right_temp)
-					detected = 0
-					empty_section = 0
-					right_saved = 0
-					center = (obj[index][0] + obj[index][1]) // 2
-					obj[index].append(center)
-					index = index + 1
-					if obj[index-1][1] - obj[index-1][0] < 40:
-						obj.pop()
-						index = index - 1
-				
-				if (roi_legs[i] == 255) and (detected == 1) and (empty_section < 30):
-					empty_section = 0
-					right_saved = 0
-
-				if (i == roi_legs.shape[0]-1) and (detected == 1):
-					obj[index].append(i)
-					center = (obj[index][0] + obj[index][1]) // 2
-					obj[index].append(center)
-					index = index + 1
-					if obj[index-1][1] - obj[index-1][0] < 40:
-						obj.pop()
-
-			if index == 3:
-				obj.pop(1)
-
-			legs = np.array(obj)
-
-			# get roi back leg
-			top_crop = 0
-			bottom_crop = 700
-			left_crop = legs[1,0]
-			right_crop = left_crop + 1
-			roi_back_leg = smoothed[top_crop:bottom_crop, left_crop:right_crop]
-			roi_back_leg = np.swapaxes(roi_back_leg, 1, 0)[0]
-
-			# get tinggi pinggul
-			detected = 0
-			obj_section = 0
-			empty_section = 0
-
-			for i in range(0, roi_back_leg.shape[0]):
-				if (roi_back_leg[i] == 255) and (detected == 0):
-					detected = 1
-					top = i
-					obj_section = obj_section + 1
-
-				if (roi_back_leg[i] == 255) and (detected == 1):
-					obj_section = obj_section + 1
-					if empty_section > 30:
-						if obj_section-empty_section < 200:
-							detected = 0
-							obj_section = 0
-						else:
-							break
-					empty_section = 0
-
-				if (roi_back_leg[i] == 0) and (detected == 1):
-					empty_section = empty_section + 1
-					obj_section = obj_section + 1
-
-			detected = 0
-			empty_section = 0
-
-			for i in range(roi_back_leg.shape[0]-1, 0, -1):
-				if (roi_back_leg[i] == 255) and (detected == 0):
-					detected = 1
-					bottom = i
-
-				if (roi_back_leg[i] == 255) and (detected == 1):
-					if empty_section > 10:
-						bottom = i
-						break    
-					empty_section = 0
-
-				if (roi_back_leg[i] == 0) and (detected == 1):
-					empty_section = empty_section + 1
-			  
-			tinggi_pinggul = bottom - top
-
-			# get roi back of hump
-			top_crop = 0
-			bottom_crop = 700
-			left_crop = legs[0,1]
-			right_crop = left_crop + 1
-			roi_back_of_hump = smoothed[top_crop:bottom_crop, left_crop:right_crop]
-			roi_back_of_hump = np.swapaxes(roi_back_of_hump, 1, 0)[0]
-
-			# get tinggi panggul
-			detected = 0
-			obj_section = 0
-			empty_section = 0
-
-			for i in range(0, roi_back_of_hump.shape[0]):
-				if (roi_back_of_hump[i] == 255) and (detected == 0):
-					detected = 1
-					top2 = i
-					obj_section = obj_section + 1
-
-				if (roi_back_of_hump[i] == 255) and (detected == 1):
-					obj_section = obj_section + 1
-					if empty_section > 30:
-						if obj_section-empty_section < 200:
-							detected = 0
-							obj_section = 0
-						else:
-							break
-					empty_section = 0
-
-				if (roi_back_of_hump[i] == 0) and (detected == 1):
-					empty_section = empty_section + 1
-					obj_section = obj_section + 1
-
-			tinggi_panggul = bottom - top2
-
-			# get pin bone
-			top_crop = int(bottom - 0.9 * tinggi_pinggul)
-			bottom_crop = top_crop + 1
-			left_crop = legs[1,1]
-			right_crop = 770
-			roi_pin_bone = smoothed[top_crop:bottom_crop, left_crop:right_crop][0]
-
-			detected = 0
-			empty_section = 0
-			for i in range(0, roi_pin_bone.shape[0]):
-				if (roi_pin_bone[i] == 255) and (detected == 0):
-					detected = 1
-					x_pin_bone = i
-			  
-				if (roi_pin_bone[i] == 0) and (detected == 1):
-					empty_section = empty_section + 1
-
-				if (roi_pin_bone[i] == 255) and (detected == 1):
-					if empty_section > 20:
-						break
+					if obj_section-empty_section < 200:
+						detected = 0
+						obj_section = 0
 					else:
-						x_pin_bone = i
+						break
+				empty_section = 0
 
-			pin_bone = (x_pin_bone + legs[1,1], int(bottom - (0.9 * tinggi_pinggul)))
+			if (roi_back_leg[i] == 0) and (detected == 1):
+				empty_section = empty_section + 1
+				obj_section = obj_section + 1
 
-			# get shoulder
-			shoulder = (legs[0,0], int(bottom - (0.55 * tinggi_panggul)))
+		detected = 0
+		empty_section = 0
 
-			# get panjang
-			panjang = round(math.sqrt((shoulder[0] - pin_bone[0])**2 + (shoulder[1] - pin_bone[1])**2))
+		for i in range(roi_back_leg.shape[0]-1, 0, -1):
+			if (roi_back_leg[i] == 255) and (detected == 0):
+				detected = 1
+				bottom = i
 
-			# cow size
-			pixel_ratio = 0.05
-			tinggi_panggul = round(tinggi_panggul * pixel_ratio, 1)
-			tinggi_pinggul = round(tinggi_pinggul * pixel_ratio, 1)
-			panjang = round(panjang * pixel_ratio, 1)
+			if (roi_back_leg[i] == 255) and (detected == 1):
+				if empty_section > 10:
+					bottom = i
+					break    
+				empty_section = 0
+
+			if (roi_back_leg[i] == 0) and (detected == 1):
+				empty_section = empty_section + 1
+
+		tinggi_pinggul = bottom - top
+
+		# get roi back of hump
+		top_crop = 0
+		bottom_crop = 700
+		left_crop = legs[0,1]
+		right_crop = left_crop + 1
+		roi_back_of_hump = smoothed[top_crop:bottom_crop, left_crop:right_crop]
+		roi_back_of_hump = np.swapaxes(roi_back_of_hump, 1, 0)[0]
+
+		# get tinggi panggul
+		detected = 0
+		obj_section = 0
+		empty_section = 0
+
+		for i in range(0, roi_back_of_hump.shape[0]):
+			if (roi_back_of_hump[i] == 255) and (detected == 0):
+				detected = 1
+				top2 = i
+				obj_section = obj_section + 1
+
+			if (roi_back_of_hump[i] == 255) and (detected == 1):
+				obj_section = obj_section + 1
+				if empty_section > 30:
+					if obj_section-empty_section < 200:
+						detected = 0
+						obj_section = 0
+					else:
+						break
+				empty_section = 0
+
+			if (roi_back_of_hump[i] == 0) and (detected == 1):
+				empty_section = empty_section + 1
+				obj_section = obj_section + 1
+
+		tinggi_panggul = bottom - top2
+
+		# get pin bone
+		top_crop = int(bottom - 0.9 * tinggi_pinggul)
+		bottom_crop = top_crop + 1
+		left_crop = legs[1,1]
+		right_crop = 770
+		roi_pin_bone = smoothed[top_crop:bottom_crop, left_crop:right_crop][0]
+
+		detected = 0
+		empty_section = 0
+		for i in range(0, roi_pin_bone.shape[0]):
+			if (roi_pin_bone[i] == 255) and (detected == 0):
+				detected = 1
+				x_pin_bone = i
+
+			if (roi_pin_bone[i] == 0) and (detected == 1):
+				empty_section = empty_section + 1
+
+			if (roi_pin_bone[i] == 255) and (detected == 1):
+				if empty_section > 20:
+					break
+				else:
+					x_pin_bone = i
+
+		pin_bone = (x_pin_bone + legs[1,1], int(bottom - (0.9 * tinggi_pinggul)))
+
+		# get shoulder
+		shoulder = (legs[0,0], int(bottom - (0.55 * tinggi_panggul)))
+
+		# get panjang
+		panjang = round(math.sqrt((shoulder[0] - pin_bone[0])**2 + (shoulder[1] - pin_bone[1])**2))
+
+		# cow size
+		pixel_ratio = 0.05
+		tinggi_panggul = round(tinggi_panggul * pixel_ratio, 1)
+		tinggi_pinggul = round(tinggi_pinggul * pixel_ratio, 1)
+		panjang = round(panjang * pixel_ratio, 1)
+
+		print('Berat: ' + str(berat) + ' kg')
+		print('Panjang:  ' + str(panjang) + ' cm')
+		print('Tinggi Panggul: ' + str(tinggi_panggul) + ' cm')
+		print('Tinggi Pinggul: ' + str(tinggi_pinggul) + ' cm')
 			
-			print('Berat: ' + str(berat) + ' kg')
-			print('Panjang:  ' + str(panjang) + ' cm')
-			print('Tinggi Panggul: ' + str(tinggi_panggul) + ' cm')
-			print('Tinggi Pinggul: ' + str(tinggi_pinggul) + ' cm')
-			
-		except:
-			print('Cow Size Estimation FAILED')
+#		except:
+#			print('Cow Size Estimation FAILED')
 
 # ==================================================================================
 		# UPLOAD TO SERVER
